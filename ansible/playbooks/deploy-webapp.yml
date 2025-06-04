@@ -1,0 +1,58 @@
+---
+- name: Deploy Node.js/React application
+  hosts: webservers
+  become: yes
+
+  tasks:
+    - name: Install Node.js repository
+      shell: |
+        curl -sL https://rpm.nodesource.com/setup_{{ node_version }} | bash -
+
+    - name: Install required packages
+      yum:
+        name:
+          - nodejs
+          - git
+          - nginx
+        state: present
+
+    - name: Create application directory
+      file:
+        path: "{{ app_dir }}"
+        state: directory
+        mode: '0755'
+
+    - name: Clone application repository
+      git:
+        repo: "{{ repository_url }}"
+        dest: "{{ app_dir }}"
+        version: main
+
+    - name: Install npm dependencies
+      npm:
+        path: "{{ app_dir }}"
+        state: present
+        ci: yes
+
+    - name: Build React application
+      shell: npm run build
+      args:
+        chdir: "{{ app_dir }}"
+
+    - name: Configure Nginx
+      template:
+        src: ../templates/nginx.conf.j2
+        dest: /etc/nginx/conf.d/myapp.conf
+      notify: Restart Nginx
+
+    - name: Start Nginx
+      service:
+        name: nginx
+        state: started
+        enabled: yes
+
+  handlers:
+    - name: Restart Nginx
+      service:
+        name: nginx
+        state: restarted

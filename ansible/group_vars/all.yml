@@ -1,0 +1,24 @@
+---
+# Docker Image Configuration
+docker_image_name: "myapp"
+docker_image_tag: "1.0.0"                    # Use specific version instead of 'latest'
+
+# Application Configuration
+repository_url: "https://github.com/your/repository.git"
+docker_build_context: "{{ playbook_dir }}/../../"  # Path to Dockerfile location
+
+# Container Runtime Configuration
+container_name: "myapp"
+container_ports:
+  - "80:80"       # Host:Container port mapping
+container_env:
+  NODE_ENV: "production"
+
+# Resource Limits
+container_memory: "512m"
+container_cpu: "0.5"
+
+# Health Check
+health_check_interval: "30s"
+health_check_timeout: "10s"
+health_check_retries: 3

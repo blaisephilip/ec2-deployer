@@ -1,0 +1,56 @@
+---
+- name: Deploy Docker containerized Node.js/React application
+  hosts: webservers
+  become: yes
+  vars_files:
+    - ../group_vars/all.yml
+
+  tasks:
+    - name: Install required packages
+      yum:
+        name: 
+          - docker
+          - python3-pip
+          - git
+        state: present
+
+    - name: Install Docker Python SDK
+      pip:
+        name: docker
+
+    - name: Start Docker service
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Build Docker image
+      docker_image:
+        build:
+          path: "{{ docker_build_context }}"
+          dockerfile: docker/Dockerfile
+        name: "{{ docker_image_name }}"
+        tag: "{{ docker_image_tag }}"
+        source: build
+        force_source: yes
+
+    - name: Remove existing container
+      docker_container:
+        name: "{{ container_name }}"
+        state: absent
+
+    - name: Run Docker container
+      docker_container:
+        name: "{{ container_name }}"
+        image: "{{ docker_image_name }}:{{ docker_image_tag }}"
+        state: started
+        restart_policy: always
+        published_ports: "{{ container_ports }}"
+        env: "{{ container_env }}"
+        memory: "{{ container_memory }}"
+        cpu_shares: "{{ container_cpu }}"
+        healthcheck:
+          test: ["CMD", "curl", "-f", "http://localhost/health"]
+          interval: "{{ health_check_interval }}"
+          timeout: "{{ health_check_timeout }}"
+          retries: "{{ health_check_retries }}"
