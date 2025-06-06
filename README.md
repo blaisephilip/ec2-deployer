@@ -4,6 +4,7 @@ Docker-based deployment of Node.js/React applications to AWS EC2 using Ansible.
 
 ## Prerequisites
 
+- Debian-based OS
 - Ansible installed on your local machine
 - AWS EC2 instance running Amazon Linux 2
 - SSH access to EC2 instance
@@ -11,16 +12,38 @@ Docker-based deployment of Node.js/React applications to AWS EC2 using Ansible.
 
 ## Setup
 
-1. Install Required Tools:
+1. Install required tools:
+
+**Ansible**
 
 ```bash
-pip install ansible docker
+cd scripts
+./setup-environment.sh
 ```
 
-2. Update Configuration:
+The script shall prompt you to install missing APT packages. If all packages are present, it will create a virtual environment to run Ansible.  
+
+**AWS CLI**  
+Follow the instructions in doc/install_aws_cli.md.  
+
+2. Extend and update the local configuration
 
 - Edit `ansible/inventory/production.ini` with your EC2 details
+- Use the EC2 instance's private IP.
+- Create a dedicated SSH key for Ansible to use. It is automatically downloaded.
+- Move the key to ~/.ssh
+- Adjust the name in the production.ini file.
+
 - Update `ansible/group_vars/all.yml` with your settings
+
+# Get instance details from AWS CLI
+aws ec2 describe-instances --filters "Name=tag:elasticbeanstalk:environment-name,Values=your-environment-name" --query 'Reservations[*].Instances[*].[PrivateIpAddress,PublicIpAddress]' --output table
+
+# Test SSH connection
+ssh -i ~/.ssh/your-key.pem ec2-user@<EC2-IP>
+# Verify Ansible can reach the host
+ansible -i inventory/production.ini webservers -m ping
+
 
 ## Deploy
 
@@ -57,9 +80,9 @@ Copy the "Public IPv4 address" or "Public IPv4 DNS"
 
 
 ansible_user: The SSH user for EC2 instance  
-For Amazon Linux 2 AMI: use ec2-user
-For Ubuntu AMI: use ubuntu
-For RHEL AMI: use ec2-user
+* For Amazon Linux 2 AMI: use ec2-user
+* For Ubuntu AMI: use ubuntu
+* For RHEL AMI: use ec2-user
 
 ansible_ssh_private_key_file: Path to your .pem key file  
 Use the full path to your .pem file

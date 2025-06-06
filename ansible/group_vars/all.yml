@@ -5,7 +5,7 @@ docker_image_tag: "1.0.0"                    # Use specific version instead of '
 
 # Application Configuration
 repository_url: "https://github.com/your/repository.git"
-docker_build_context: "{{ playbook_dir }}/../../"  # Path to Dockerfile location
+docker_build_context: "{{ playbook_dir }}/../../docker/"  # Path to Dockerfile location
 
 # Container Runtime Configuration
 container_name: "myapp"

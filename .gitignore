@@ -137,3 +137,5 @@ dist
 .pnp.*
 
 scripts/ansible-env
+
+config/ec2_config.yml

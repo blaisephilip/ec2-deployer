@@ -1,0 +1,36 @@
+---
+- name: Test connection to EC2 production instance
+  hosts: webservers
+  become: yes
+  vars_files:
+    - ../../config/ec2_config.yml
+    - ../group_vars/all.yml
+
+  pre_tasks:
+    - name: Install python3-pip
+      yum:
+        name: python3-pip
+        state: present
+
+    - name: Install required Python packages
+      pip:
+        name:
+          - boto3
+          - botocore
+        state: present
+
+  tasks:
+    - name: Gather EC2 instance information
+      amazon.aws.ec2_instance_info:
+        region: "{{ aws_region }}"
+        instance_ids:
+          - "{{ instance_id }}"
+      register: ec2_info
+    
+    - name: Debug the instance information
+      debug:
+        msg: "Instance details: {{ ec2_info }}"
+
+    - name: Debug the public IP
+      debug:
+        msg: "Public IP: {{ ec2_info.instances[0].public_ip_address }}"

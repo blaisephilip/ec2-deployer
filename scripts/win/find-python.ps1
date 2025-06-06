@@ -1,5 +1,22 @@
 Write-Host "Searching for Python installations..."
 
+# Check if running on Windows
+if ($null -eq $IsWindows) {
+    # PowerShell 5.1 or below
+    $IsWindowsOS = $true # Since PS 5.1 only runs on Windows
+} else {
+    # PowerShell Core 6.0 or higher
+    $IsWindowsOS = $IsWindows
+}
+
+if ($IsWindowsOS) {
+    Write-Host "Running on Windows"
+} else {
+    Write-Host "Not running on Windows - exiting script."
+    Write-Host "This script is designed to run on Windows systems only."
+    return
+}
+
 # Check common installation paths
 $paths = @(
     "$env:LOCALAPPDATA\Programs\Python\*",

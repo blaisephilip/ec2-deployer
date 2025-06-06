@@ -6,6 +6,20 @@
     - ../group_vars/all.yml
 
   tasks:
+    - name: Gather EC2 instance information
+      amazon.aws.ec2_instance_info:
+        region: "{{ eu-central-1 }}"  # Replace with your AWS region
+        instance_ids:
+          - "{{ i-0422fd48e0ebf0635 }}"
+      register: ec2_info
+    - name: Debug the instance information
+      debug:
+        msg: "Instance details: {{ ec2_info }}"
+
+    - name: Debug the public IP
+      debug:
+        msg: "Public IP: {{ ec2_info.instances[0].public_ip_address }}"
+      register: ec2_info
     - name: Install required packages
       yum:
         name: 
