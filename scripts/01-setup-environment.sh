@@ -8,7 +8,7 @@ python3 --version
 if ! command -v python3 &> /dev/null; then
     echo "Python is not installed. Installing Python 3..."
     sudo apt update
-    sudo apt install -y python python3-venv python3-pip
+    sudo apt install -y python python3-venv python3-pip python3-packaging
     sudo apt install -y python-is-python3
 fi
 
@@ -23,6 +23,7 @@ pip install ansible
 
 # Verify Ansible installation
 ansible --version
+
 echo -e "\nPython and Ansible environment is ready!"
 deactivate
 echo "To activate the environment, run: source ansible-env/bin/activate"

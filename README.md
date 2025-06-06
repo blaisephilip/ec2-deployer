@@ -5,20 +5,18 @@ Docker-based deployment of Node.js/React applications to AWS EC2 using Ansible.
 ## Prerequisites
 
 - Debian-based OS
-- Ansible installed on your local machine
 - AWS EC2 instance running Amazon Linux 2
-- SSH access to EC2 instance
 - Node.js/React application in a Git repository
 
 ## Setup
 
-1. Install required tools:
+### Install required tools:
 
 **Ansible**
 
 ```bash
 cd scripts
-./setup-environment.sh
+./01-setup-environment.sh
 ```
 
 The script shall prompt you to install missing APT packages. If all packages are present, it will create a virtual environment to run Ansible.  
@@ -26,24 +24,79 @@ The script shall prompt you to install missing APT packages. If all packages are
 **AWS CLI**  
 Follow the instructions in doc/install_aws_cli.md.  
 
-2. Extend and update the local configuration
+### Test the connection to the EC2 instance
 
-- Edit `ansible/inventory/production.ini` with your EC2 details
-- Use the EC2 instance's private IP.
-- Create a dedicated SSH key for Ansible to use. It is automatically downloaded.
-- Move the key to ~/.ssh
-- Adjust the name in the production.ini file.
+
+Create a file called ec2_config.yml in the config folder in the root of this repository. Adapt this as file content:  
+
+```bash
+---
+aws_region: eu-central-1
+instance_id: i-00262d6502547ef43
+key_file: ~/.ssh/ansible-docker-deployer.pem
+```
+
+The region is your AWS EC2 instance's region.  
+The instance ID is visible in AWS Console.  
+The key file is automatically downloaded when it is created in AWS. Place the file to ~/.ssh/ and adjust its access rights. (chmod 400) Change the file name as necessary.  
+
+Execute the following:  
+
+```bash
+cd scripts
+./02-verify-aws-ec2-connections.sh
+```
+
+The connection test shall run successful.
+
+### Extend and update the inventory configuration
+
+Edit `ansible/inventory/production.ini` with your EC2 details: The ansible_ssh_private_key_file and the ansible_host IP value shall be adjusted.  
+- Use the EC2 instance's public IPv4 value.  
+- Adjust the SSH key name in the production.ini file as necessary.
+
+### Verify the server(s) added in the ansible inventory
+
+```bash
+cd scripts
+./03-verify-ansible-inventory.sh
+```
+
+### Test a server connection via Ansible playbook
+
+Make sure that the EC2 instance is used with an IAM role that has a policy with such actions:  
+
+```json
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "ec2:DescribeInstances",
+                "ec2:DescribeTags",
+                "ec2:DescribeInstanceStatus",
+                "ec2:DescribeSecurityGroups",
+                "ec2:DescribeNetworkInterfaces"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
+```
+
+If the policy above is attached to the role, execute the following commands:  
+
+```bash
+cd scripts
+./04-run-playbook-test.sh
+```
+
+The production.ini inventory config is used in this playbook to test if Ansible can interact with the EC2 instance. Detailed EC2 information is retrieved by Ansible in this step. If package-related access problems occur, consider adding more packages to the test-connection.yml file in the pre_tasks section.
+
+### Edit the application-specfic configuration
 
 - Update `ansible/group_vars/all.yml` with your settings
-
-# Get instance details from AWS CLI
-aws ec2 describe-instances --filters "Name=tag:elasticbeanstalk:environment-name,Values=your-environment-name" --query 'Reservations[*].Instances[*].[PrivateIpAddress,PublicIpAddress]' --output table
-
-# Test SSH connection
-ssh -i ~/.ssh/your-key.pem ec2-user@<EC2-IP>
-# Verify Ansible can reach the host
-ansible -i inventory/production.ini webservers -m ping
-
 
 ## Deploy
 

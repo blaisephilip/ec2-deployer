@@ -1,12 +1,13 @@
 ---
 - name: Deploy Docker containerized Node.js/React application
   hosts: webservers
-  become: yes
+  become: true # This enables sudo privileges for all tasks in this play
   vars_files:
     - ../group_vars/all.yml
 
   tasks:
     - name: Gather EC2 instance information
+      become: false  # Override become at task level (so this is run as the user, not root)
       amazon.aws.ec2_instance_info:
         region: "{{ eu-central-1 }}"  # Replace with your AWS region
         instance_ids:
@@ -17,6 +18,7 @@
         msg: "Instance details: {{ ec2_info }}"
 
     - name: Debug the public IP
+      become: false  # Override become at task level (so this is run as the user, not root)
       debug:
         msg: "Public IP: {{ ec2_info.instances[0].public_ip_address }}"
       register: ec2_info
