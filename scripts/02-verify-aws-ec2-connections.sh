@@ -6,8 +6,10 @@ source "$(dirname "$0")/parse_config.sh"
 INSTANCE_ID="$instance_id"
 KEY_FILE="$key_file"
 
-#INSTANCE_ID="i-00262d6502547ef43"
-#KEY_FILE="~/.ssh/ansible-docker-deployer.pem"
+if [ -z "$INSTANCE_ID" ] || [ -z "$KEY_FILE" ]; then
+    echo "Error: INSTANCE_ID or KEY_FILE is not set in the configuration."
+    exit 1
+fi
 
 echo "Testing SSM connection to EC2 instance: $INSTANCE_ID"
 

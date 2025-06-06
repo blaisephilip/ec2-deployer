@@ -3,15 +3,16 @@
   hosts: webservers
   become: true # This enables sudo privileges for all tasks in this play
   vars_files:
+    - ../../config/ec2_config.yml
     - ../group_vars/all.yml
 
   tasks:
     - name: Gather EC2 instance information
       become: false  # Override become at task level (so this is run as the user, not root)
       amazon.aws.ec2_instance_info:
-        region: "{{ eu-central-1 }}"  # Replace with your AWS region
+        region: "{{ aws_region }}"
         instance_ids:
-          - "{{ i-0422fd48e0ebf0635 }}"
+          - "{{ instance_id }}"
       register: ec2_info
     - name: Debug the instance information
       debug:

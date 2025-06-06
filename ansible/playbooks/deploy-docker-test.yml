@@ -1,0 +1,70 @@
+---
+- name: Deploy Docker containerized Node.js/React application
+  hosts: webservers
+  become: true # This enables sudo privileges for all tasks in this play
+  vars_files:
+    - ../../config/ec2_config.yml
+    - ../group_vars/all.yml
+
+  tasks:
+    - name: Gather EC2 instance information
+      become: false  # Override become at task level (so this is run as the user, not root)
+      amazon.aws.ec2_instance_info:
+        region: "{{ aws_region }}"
+        instance_ids:
+          - "{{ instance_id }}"
+      register: ec2_info
+    - name: Debug the instance information
+      debug:
+        msg: "Instance details: {{ ec2_info }}"
+
+    - name: Debug the public IP
+      become: false  # Override become at task level (so this is run as the user, not root)
+      debug:
+        msg: "Public IP: {{ ec2_info.instances[0].public_ip_address }}"
+      register: ec2_info
+    - name: Install required packages
+      yum:
+        name: 
+          - docker
+          - python3-pip
+          - git
+        state: present
+
+    - name: Start Docker service
+      service:
+        name: docker
+        state: started
+        enabled: yes
+      register: docker_service
+    - name: Show Docker service status
+      debug:
+        msg: >
+          Docker service status:
+          Running: {{ docker_service.status.ActiveState == 'active' }}
+          Enabled: {{ docker_service.status.UnitFileState == 'enabled' }}
+      when: docker_service is defined
+
+    - name: List Docker images
+      command: docker images
+      register: docker_images
+      changed_when: false  # This command doesn't modify the system
+    - name: Show Docker images
+      debug:
+        msg: "{{ docker_images.stdout_lines }}"
+
+    - name: List Docker containers
+      command: docker ps -a
+      register: docker_containers
+      changed_when: false  # This command doesn't modify the system
+    - name: Show Docker containers
+      debug:
+        msg: "{{ docker_containers.stdout_lines }}"
+    - name: List Docker port mappings
+      shell: 'docker ps --format "table {% raw %}{{.Names}}{% endraw %}\t{% raw %}{{.Ports}}{% endraw %}"'
+      register: docker_ports
+      changed_when: false
+
+    - name: Show port mappings
+      debug:
+        msg: "Container port mappings:\n{{ docker_ports.stdout_lines | join('\n') }}"
