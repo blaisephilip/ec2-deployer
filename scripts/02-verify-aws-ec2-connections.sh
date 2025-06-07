@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Start time measurement
+start_time=$(date +%s)
+
 source "$(dirname "$0")/parse_config.sh"
 
 # Set your EC2 instance ID
@@ -11,7 +14,7 @@ if [ -z "$INSTANCE_ID" ] || [ -z "$KEY_FILE" ]; then
     exit 1
 fi
 
-echo "Testing SSM connection to EC2 instance: $INSTANCE_ID"
+echo "Testing connection to EC2 instance: $INSTANCE_ID"
 
 # Check AWS CLI configuration
 if ! aws sts get-caller-identity &>/dev/null; then
@@ -89,3 +92,14 @@ else
     echo "3. Instance has public IP and is reachable"
     exit 1
 fi
+
+# Calculate and display execution time
+end_time=$(date +%s)
+duration=$((end_time - start_time))
+
+hours=$((duration / 3600))
+minutes=$(( (duration % 3600) / 60 ))
+seconds=$((duration % 60))
+
+# Format with leading zeros
+printf "Duration: %02d:%02d:%02d\n" $hours $minutes $seconds

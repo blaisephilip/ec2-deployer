@@ -68,3 +68,58 @@
     - name: Show port mappings
       debug:
         msg: "Container port mappings:\n{{ docker_ports.stdout_lines | join('\n') }}"
+
+    - name: Remove old container and image
+      block:
+        - name: Check if container exists
+          command: docker ps -a --format '{% raw %}{{.Names}}{% endraw %}'
+          register: existing_containers
+          changed_when: false
+
+        - name: Stop running container
+          docker_container:
+            name: "{{ container_name }}"
+            state: stopped
+          when: container_name in existing_containers.stdout_lines
+          ignore_errors: true
+
+        - name: Remove container
+          docker_container:
+            name: "{{ container_name }}"
+            state: absent
+          ignore_errors: true
+
+        - name: Check if image exists
+          command: "docker images {{ docker_image_name }}:{{ image_tag | default('latest') }} --format '{% raw %}{{.Repository}}:{{.Tag}}{% endraw %}'"
+          register: existing_images
+          changed_when: false
+
+        - name: Remove Docker image
+          docker_image:
+            name: "{{ docker_image_name }}"
+            tag: "{{ image_tag | default('latest') }}"
+            state: absent
+            force_absent: yes
+          when: existing_images.stdout_lines | length > 0
+          ignore_errors: true
+
+    - name: Verify removal
+      block:
+        - name: Check containers
+          command: docker ps -a
+          register: containers
+          changed_when: false
+
+        - name: Check images
+          command: docker images
+          register: images
+          changed_when: false
+
+        - name: Show results
+          debug:
+            msg: |
+              Remaining containers:
+              {{ containers.stdout_lines }}
+              
+              Remaining images:
+              {{ images.stdout_lines }}

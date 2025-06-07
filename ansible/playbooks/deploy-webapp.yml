@@ -1,7 +1,7 @@
 ---
 - name: Deploy Node.js/React application
   hosts: webservers
-  become: yes
+  become: true
 
   tasks:
     - name: Install Node.js repository

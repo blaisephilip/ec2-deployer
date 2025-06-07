@@ -100,6 +100,16 @@ The production.ini inventory config is used in this playbook to test if Ansible 
 
 ## Deploy
 
+Deployment variants:
+1. Local build, local image, direct deployment to EC2.
+2. Local build, local image, image push to Github, deployment to EC2 from Github controlled by local Ansible playbook.
+3. Local build, local image, image push to Github, deployment to EC2 from Github controlled by Github Actions.
+4. Remote build via Github Actions, deployment to EC2 by local Ansible.
+5. Remote build via Github Actions, deployment to EC2 by Github Actions.
+6. Cloning and build on the EC2 instance.
+
+Currently implemented variant: 1.
+
 Run the deployment:
 
 ```bash

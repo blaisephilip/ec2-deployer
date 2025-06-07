@@ -4,7 +4,7 @@
   become: true # This enables sudo privileges for all tasks in this play
   vars_files:
     - ../../config/ec2_config.yml
-    - ../group_vars/all.yml
+    - ../../config/docker_config.yml
 
   tasks:
     - name: Gather EC2 instance information
@@ -31,43 +31,149 @@
           - git
         state: present
 
-    - name: Install Docker Python SDK
-      pip:
-        name: docker
-
     - name: Start Docker service
       service:
         name: docker
         state: started
         enabled: yes
+      register: docker_service
+    - name: Show Docker service status
+      debug:
+        msg: >
+          Docker service status:
+          Running: {{ docker_service.status.ActiveState == 'active' }}
+          Enabled: {{ docker_service.status.UnitFileState == 'enabled' }}
+      when: docker_service is defined
 
-    - name: Build Docker image
-      docker_image:
-        build:
-          path: "{{ docker_build_context }}"
-          dockerfile: docker/Dockerfile
-        name: "{{ docker_image_name }}"
-        tag: "{{ docker_image_tag }}"
-        source: build
-        force_source: yes
+    - name: List Docker images
+      command: docker images
+      register: docker_images
+      changed_when: false  # This command doesn't modify the system
+    - name: Show Docker images
+      debug:
+        msg: "{{ docker_images.stdout_lines }}"
 
-    - name: Remove existing container
-      docker_container:
-        name: "{{ container_name }}"
-        state: absent
+    - name: List Docker containers
+      command: docker ps -a
+      register: docker_containers
+      changed_when: false  # This command doesn't modify the system
+    - name: Show Docker containers
+      debug:
+        msg: "{{ docker_containers.stdout_lines }}"
+    - name: List Docker port mappings
+      shell: 'docker ps --format "table {% raw %}{{.Names}}{% endraw %}\t{% raw %}{{.Ports}}{% endraw %}"'
+      register: docker_ports
+      changed_when: false
 
-    - name: Run Docker container
-      docker_container:
-        name: "{{ container_name }}"
-        image: "{{ docker_image_name }}:{{ docker_image_tag }}"
-        state: started
-        restart_policy: always
-        published_ports: "{{ container_ports }}"
-        env: "{{ container_env }}"
-        memory: "{{ container_memory }}"
-        cpu_shares: "{{ container_cpu }}"
-        healthcheck:
-          test: ["CMD", "curl", "-f", "http://localhost/health"]
-          interval: "{{ health_check_interval }}"
-          timeout: "{{ health_check_timeout }}"
-          retries: "{{ health_check_retries }}"
+    - name: Show port mappings
+      debug:
+        msg: "Container port mappings:\n{{ docker_ports.stdout_lines | join('\n') }}"
+
+    - name: Remove old container and image
+      block:
+        - name: Check if container exists
+          command: docker ps -a --format '{% raw %}{{.Names}}{% endraw %}'
+          register: existing_containers
+          changed_when: false
+
+        - name: Stop running container
+          docker_container:
+            name: "{{ container_name }}"
+            state: stopped
+          when: container_name in existing_containers.stdout_lines
+          ignore_errors: true
+
+        - name: Remove container
+          docker_container:
+            name: "{{ container_name }}"
+            state: absent
+          ignore_errors: true
+
+        - name: Check if image exists
+          command: "docker images {{ docker_image_name }}:{{ image_tag | default('latest') }} --format '{% raw %}{{.Repository}}:{{.Tag}}{% endraw %}'"
+          register: existing_images
+          changed_when: false
+
+        - name: Remove Docker image
+          docker_image:
+            name: "{{ docker_image_name }}"
+            tag: "{{ image_tag | default('latest') }}"
+            state: absent
+            force_absent: yes
+          when: existing_images.stdout_lines | length > 0
+          ignore_errors: true
+
+    - name: Verify removal
+      block:
+        - name: Check containers
+          command: docker ps -a
+          register: containers
+          changed_when: false
+
+        - name: Check images
+          command: docker images
+          register: images
+          changed_when: false
+
+        - name: Show results
+          debug:
+            msg: |
+              Remaining containers:
+              {{ containers.stdout_lines }}
+              
+              Remaining images:
+              {{ images.stdout_lines }}
+
+    - name: Deploy new container
+      block:
+        - name: Copy Docker image to remote host
+          copy:
+            src: "{{ docker_image_archive }}"
+            dest: "/tmp/rami4visualizer.tar"
+          register: copy_image
+
+        - name: Load Docker image
+          command: docker load -i /tmp/rami4visualizer.tar
+          when: copy_image is succeeded
+
+        - name: Remove temporary image file
+          file:
+            path: "/tmp/rami4visualizer.tar"
+            state: absent
+
+        - name: Start container
+          docker_container:
+            name: "{{ container_name }}"
+            image: "{{ docker_image_name }}:{{ docker_image_tag }}"
+            state: started
+            restart_policy: unless-stopped
+            ports: "{{ container_ports }}"
+            env: "{{ container_env }}"
+            memory: "{{ container_memory }}"
+            cpu_shares: "{{ container_cpu }}"
+          register: container_start
+
+        - name: Verify container is running
+          block:
+            - name: Get container status
+              command: "docker inspect --format '{% raw %}{{.State.Status}}{% endraw %}' {{ container_name }}"
+              register: container_status
+              changed_when: false
+
+            - name: Check container health
+              command: "docker inspect --format '{% raw %}{{.State.Health.Status}}{% endraw %}' {{ container_name }}"
+              register: container_health
+              ignore_errors: true
+              changed_when: false
+
+            - name: Show container verification results
+              debug:
+                msg: |
+                  Container Status: {{ container_status.stdout }}
+                  Container Health: {{ container_health.stdout | default('No health check configured') }}
+                  Container Ports: {{ container_start.container.HostConfig.PortBindings | default('No ports mapped') }}
+
+            - name: Fail if container is not running
+              fail:
+                msg: "Container failed to start. Status: {{ container_status.stdout }}"
+              when: container_status.stdout != 'running'

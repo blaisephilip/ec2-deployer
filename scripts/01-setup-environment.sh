@@ -1,5 +1,9 @@
 #!/bin/bash
 # This script sets up a Python virtual environment with Ansible installed.
+
+# Start time measurement
+start_time=$(date +%s)
+
 # Check current Python version
 echo "Current Python version:"
 python3 --version
@@ -27,3 +31,15 @@ ansible --version
 echo -e "\nPython and Ansible environment is ready!"
 deactivate
 echo "To activate the environment, run: source ansible-env/bin/activate"
+
+
+# Calculate and display execution time
+end_time=$(date +%s)
+duration=$((end_time - start_time))
+
+hours=$((duration / 3600))
+minutes=$(( (duration % 3600) / 60 ))
+seconds=$((duration % 60))
+
+# Format with leading zeros
+printf "Duration: %02d:%02d:%02d\n" $hours $minutes $seconds

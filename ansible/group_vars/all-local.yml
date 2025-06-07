@@ -1,0 +1,20 @@
+---
+# Docker Image Configuration
+docker_image_name: "rami4visualizer"     # Your local image name
+docker_image_tag: "1.0"                  # Specific version tag
+
+# Container Runtime Configuration
+container_name: "rami4visualizer"        # Descriptive container name
+container_ports:
+  - "80:80"                             # Host:Container port mapping
+container_env:
+  NODE_ENV: "production"
+
+# Resource Limits
+container_memory: "512m"
+container_cpu: "0.5"
+
+# Health Check
+health_check_interval: "30s"
+health_check_timeout: "10s"
+health_check_retries: 3

@@ -1,6 +1,9 @@
 #!/bin/bash
 # This script verifies the Ansible inventory and tests connectivity to all hosts.
 
+# Start time measurement
+start_time=$(date +%s)
+
 # Set inventory path
 INVENTORY_PATH="../ansible/inventory/production.ini"
 
@@ -28,3 +31,14 @@ echo "#################################################################"
 
 # Deactivate virtual environment
 deactivate
+
+# Calculate and display execution time
+end_time=$(date +%s)
+duration=$((end_time - start_time))
+
+hours=$((duration / 3600))
+minutes=$(( (duration % 3600) / 60 ))
+seconds=$((duration % 60))
+
+# Format with leading zeros
+printf "Duration: %02d:%02d:%02d\n" $hours $minutes $seconds
