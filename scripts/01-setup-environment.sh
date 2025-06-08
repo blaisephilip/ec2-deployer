@@ -4,6 +4,14 @@
 # Start time measurement
 start_time=$(date +%s)
 
+# Install rsync if not installed
+if ! command -v rsync &> /dev/null; then
+    echo "rsync is not installed. Installing rsync..."
+    sudo apt update
+    sudo apt install -y rsync
+    rsync --version
+fi
+
 # Check current Python version
 echo "Current Python version:"
 python3 --version
