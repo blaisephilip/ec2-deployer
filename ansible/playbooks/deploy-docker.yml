@@ -5,6 +5,33 @@
   vars_files:
     - ../../config/ec2_config.yml
     - ../../config/docker_config.yml
+  gather_facts: true
+
+  pre_tasks:
+    - name: Check distribution
+      debug:
+        msg: "Operating System: {{ ansible_distribution }} ({{ ansible_os_family }})"
+
+    - name: Install required packages
+      yum:
+        name: 
+          - docker
+          - python3-pip
+          - git
+          - net-tools
+          - rsync
+        state: present
+
+    - name: Install required Python packages  
+      pip:
+        name:
+          - boto3
+          - botocore
+          - packaging
+        state: present
+
+    - name: End playbook after container verification
+      meta: end_play
 
   tasks:
     - name: Gather EC2 instance information
@@ -23,13 +50,42 @@
       debug:
         msg: "Public IP: {{ ec2_info.instances[0].public_ip_address }}"
       register: ec2_info
-    - name: Install required packages
-      yum:
-        name: 
-          - docker
-          - python3-pip
-          - git
-        state: present
+
+    - name: Check distribution
+      debug:
+        msg: "Operating System: {{ ansible_distribution }} ({{ ansible_os_family }})"
+
+    - name: Install and configure Nginx
+      block:
+        - name: Install Nginx
+          yum:
+            name: nginx
+            state: present
+
+        - name: Start Nginx service
+          service:
+            name: nginx
+            state: started
+            enabled: yes
+          register: nginx_service
+
+        - name: Show Nginx service status
+          debug:
+            msg: |
+              ================ Nginx Status ================
+              Running: {{ nginx_service.status.ActiveState == 'active' }}
+              Enabled: {{ nginx_service.status.UnitFileState == 'enabled' }}
+
+        - name: Check Nginx configuration
+          command: nginx -t
+          changed_when: false
+          register: nginx_config_test
+
+        - name: Show Nginx configuration test results
+          debug:
+            msg: |
+              ================ Nginx Config Test ================
+              {{ nginx_config_test.stderr_lines | join('\n') }}
 
     - name: Start Docker service
       service:
@@ -81,28 +137,45 @@
             name: "{{ container_name }}"
             state: stopped
           when: container_name in existing_containers.stdout_lines
-          ignore_errors: true
 
         - name: Remove container
           docker_container:
             name: "{{ container_name }}"
             state: absent
-          ignore_errors: true
 
         - name: Check if image exists
-          command: "docker images {{ docker_image_name }}:{{ image_tag | default('latest') }} --format '{% raw %}{{.Repository}}:{{.Tag}}{% endraw %}'"
+          command: "docker images {{ docker_image_name }}:{{ docker_image_tag }} --format '{% raw %}{{.Repository}}:{{.Tag}}{% endraw %}'"
           register: existing_images
-          changed_when: false
+
+        - name: Show image being checked
+          debug:
+            msg: |
+              =================== Image Check ===================
+              Looking for image: {{ docker_image_name }}:{{ docker_image_tag }}
+              Found images: {{ existing_images.stdout_lines | default('none') }}
 
         - name: Remove Docker image
-          docker_image:
-            name: "{{ docker_image_name }}"
-            tag: "{{ image_tag | default('latest') }}"
-            state: absent
-            force_absent: yes
-          when: existing_images.stdout_lines | length > 0
-          ignore_errors: true
+          shell: |
+            if docker images {{ docker_image_name }}:{{ docker_image_tag }} -q | grep -q .; then
+              docker rmi -f $(docker images {{ docker_image_name }}:{{ docker_image_tag }} -q)
+              echo "Image removed"
+            else
+              echo "No matching image found"
+            fi
+          register: image_removal
+          ignore_errors: false
 
+        - name: Show image removal status
+          debug:
+            msg: |
+              ================ Image Removal Status ================
+              {{ image_removal.stdout }}
+
+        - name: Remove image archive if it exists
+          file:
+            path: "/tmp/r4visualizer-frontend.tar"
+            state: absent
+   
     - name: Verify removal
       block:
         - name: Check containers
@@ -126,33 +199,105 @@
 
     - name: Deploy new container
       block:
+        - name: Check if Docker archive exists locally
+          stat:
+            path: "{{ docker_image_archive }}"
+          delegate_to: localhost
+          become: false
+          register: archive_stat
+
+        - name: Fail if archive doesn't exist
+          fail:
+            msg: "Docker image archive not found at {{ docker_image_archive }}"
+          when: not archive_stat.stat.exists
+
+        - name: Get local archive hash
+          stat:
+            path: "{{ docker_image_archive }}"
+            checksum_algorithm: sha256
+          delegate_to: localhost
+          become: false
+          register: local_archive
+
+        - name: Get remote archive hash
+          stat:
+            path: "/tmp/r4visualizer-frontend.tar"
+            checksum_algorithm: sha256
+          register: remote_archive
+          ignore_errors: true
+
+        - name: Debug hash comparison
+          debug:
+            msg: |
+              Local hash: {{ local_archive.stat.checksum }}
+              Remote hash: {{ remote_archive.stat.checksum | default('not present') }}
+
         - name: Copy Docker image to remote host
           copy:
             src: "{{ docker_image_archive }}"
-            dest: "/tmp/rami4visualizer.tar"
+            dest: "/tmp/r4visualizer-frontend.tar"
+            mode: '0644'
           register: copy_image
+          when: >
+            not remote_archive.stat.exists or
+            remote_archive.stat.checksum != local_archive.stat.checksum
+
+        - name: Show existing image details
+          shell: docker images {{ docker_image_name }}:{{ docker_image_tag }} --format "ID:{% raw %}{{.ID}}{% endraw %} Created:{% raw %}{{.CreatedAt}}{% endraw %}"
+          register: image_before
+          changed_when: false
+          ignore_errors: true
 
         - name: Load Docker image
-          command: docker load -i /tmp/rami4visualizer.tar
+          command: docker load -i /tmp/r4visualizer-frontend.tar
+          register: load_result
           when: copy_image is succeeded
 
-        - name: Remove temporary image file
-          file:
-            path: "/tmp/rami4visualizer.tar"
-            state: absent
+        - name: Check port 8000 usage
+          block:
+            - name: Check if port 8000 is in use
+              shell: |
+                if netstat -tuln | grep -q ':8000\b'; then
+                  netstat -tuln | grep ':8000\b'
+                  exit 0
+                else
+                  echo "Port 8000 is available"
+                  exit 0
+                fi
+              register: port_check
+              changed_when: false
+
+            - name: Show port status
+              debug:
+                msg: |
+                  =================== Port 8000 Status ===================
+                  {{ port_check.stdout_lines | join('\n') }}
+
+        - name: Get Docker image details
+          shell: docker images {{ docker_image_name }}:{{ docker_image_tag }} --format "ID:{% raw %}{{.ID}}{% endraw %} Digest:{% raw %}{{.Digest}}{% endraw %} Created:{% raw %}{{.CreatedAt}}{% endraw %}"
+          register: image_details
+          changed_when: false
+          ignore_errors: true
+
+        - name: Debug image details
+          debug:
+            msg: |
+              =================== Docker Image Details ===================
+              Image: {{ docker_image_name }}:{{ docker_image_tag }}
+              Details: {{ image_details.stdout_lines | default(['No image found']) | join('\n') }}
+
 
         - name: Start container
           docker_container:
             name: "{{ container_name }}"
             image: "{{ docker_image_name }}:{{ docker_image_tag }}"
             state: started
-            restart_policy: unless-stopped
+            restart_policy: "{{ restart_policy }}"
             ports: "{{ container_ports }}"
             env: "{{ container_env }}"
             memory: "{{ container_memory }}"
-            cpu_shares: "{{ container_cpu }}"
+            cpu_shares: "{{ container_cpu_shares }}"
           register: container_start
-
         - name: Verify container is running
           block:
             - name: Get container status
@@ -160,20 +305,134 @@
               register: container_status
               changed_when: false
 
-            - name: Check container health
-              command: "docker inspect --format '{% raw %}{{.State.Health.Status}}{% endraw %}' {{ container_name }}"
-              register: container_health
-              ignore_errors: true
+            - name: Get container running state
+              command: "docker inspect --format '{% raw %}{{.State.Running}}{% endraw %}' {{ container_name }}"
+              register: container_running
               changed_when: false
 
             - name: Show container verification results
               debug:
                 msg: |
-                  Container Status: {{ container_status.stdout }}
-                  Container Health: {{ container_health.stdout | default('No health check configured') }}
-                  Container Ports: {{ container_start.container.HostConfig.PortBindings | default('No ports mapped') }}
+                  =================== Container Status ===================
+                  Status: {{ container_status.stdout }}
+                  Running: {{ container_running.stdout }}
+                  Ports: {{ container_start.container.HostConfig.PortBindings | default('No ports mapped') }}
 
             - name: Fail if container is not running
               fail:
                 msg: "Container failed to start. Status: {{ container_status.stdout }}"
-              when: container_status.stdout != 'running'
+              when: not (container_status.stdout == 'running' and container_running.stdout == 'true')
+
+    - name: Show detailed service configurations
+      block:
+        - name: Create temp directory locally
+          file:
+            path: "{{ playbook_dir }}/../../temp"
+            state: directory
+          delegate_to: localhost
+          become: false
+
+        - name: Get and store Nginx configuration
+          shell: |
+            nginx -T 2>/dev/null
+          register: nginx_full_config
+          changed_when: false
+
+        - name: Save Nginx config to local file
+          copy:
+            content: "{{ nginx_full_config.stdout }}"
+            dest: "{{ playbook_dir }}/../../temp/nginx_config_{{ ansible_date_time.iso8601 }}.txt"
+          delegate_to: localhost
+          become: false
+
+        - name: Get detailed Docker port mappings
+          shell: |
+            echo "==================== Docker Port Mappings ======================"
+            docker ps --format "table {% raw %}{{.Names}}\t{{.Ports}}\t{{.Status}}{% endraw %}" | sed 's/^/    /'
+          register: docker_ports_detail
+          changed_when: false
+
+        - name: Display Docker port mappings
+          debug:
+            msg: |
+              {{ docker_ports_detail.stdout_lines }}
+              
+              Port Bindings Details:
+              {% for container in docker_containers.stdout_lines %}
+                  {{ container | indent(4) }}
+              {% endfor %}
+
+        - name: Restart Nginx service
+          block:
+            - name: Test Nginx configuration
+              shell: nginx -t
+              register: nginx_test
+              changed_when: false
+
+            - name: Show Nginx test results
+              debug:
+                msg: |
+                  ================ Nginx Config Test ================
+                  {{ nginx_test.stderr_lines | join('\n') }}
+
+            - name: Restart Nginx if config test passed
+              service:
+                name: nginx
+                state: restarted
+              when: nginx_test.rc == 0
+              register: nginx_restart
+
+            - name: Verify Nginx is running
+              shell: systemctl status nginx
+              register: nginx_status
+              changed_when: false
+
+            - name: Show formatted Nginx status
+              debug:
+                msg: |
+                  ================ Nginx Status ================
+                  Service: {{ nginx_status.stdout_lines[1] | regex_replace('\\\\n', '') | regex_replace('\\\\', '') }}
+                  Status:  {{ nginx_status.stdout_lines[4] | regex_replace('\\\\n', '') | regex_replace('\\\\', '') }}
+                  PID:     {{ nginx_status.stdout_lines[8] | regex_replace('\\\\n', '') | regex_replace('\\\\', '') }}
+                  
+                  === Process Information ===
+                  {% for line in nginx_status.stdout_lines[10:13] %}
+                  {{ line | regex_replace('\\\\n', '') | regex_replace('\\\\', '') }}
+                  {% endfor %}
+                  
+                  === Recent Logs ===
+                  {% for line in nginx_status.stdout_lines[-5:] %}
+                  {{ line | regex_replace('\\\\n', '') | regex_replace('\\\\', '') }}
+                  {% endfor %}
+
+        - name: Restart Docker service
+          block:
+            - name: Apply system configurations
+              command: sysctl -p
+              changed_when: true
+
+            - name: Restart Docker daemon
+              service:
+                name: docker
+                state: restarted
+              register: docker_restart
+
+            - name: Wait for Docker to be ready
+              wait_for:
+                timeout: 10
+
+            - name: Verify Docker is running
+              command: docker info
+              register: docker_status
+              changed_when: false
+
+            - name: Show Docker restart status
+              debug:
+                msg: |
+                  ================ Docker Restart Status ================
+                  Service: {{ docker_restart.state }}
+                  Status: {{ 'Running' if docker_status.rc == 0 else 'Failed' }}
+                  Time: {{ ansible_date_time.iso8601 }}
+
+    - name: End playbook after container verification
+      meta: end_play

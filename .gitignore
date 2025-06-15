@@ -136,6 +136,8 @@ dist
 .yarn/install-state.gz
 .pnp.*
 
-scripts/ansible-env
 
 config/ec2_config.yml
+config/docker_config.yml
+scripts/ansible-env
+temp

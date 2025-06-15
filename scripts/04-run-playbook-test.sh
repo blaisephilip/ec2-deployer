@@ -4,7 +4,7 @@
 start_time=$(date +%s)
 
 # Set inventory path
-INVENTORY_PATH="../ansible/inventory/production.ini"
+INVENTORY_PATH="../ansible/inventory/production-redhat.ini"
 
 # Activate the Python virtual environment
 source ansible-env/bin/activate

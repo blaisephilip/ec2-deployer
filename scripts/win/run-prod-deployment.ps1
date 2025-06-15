@@ -4,7 +4,7 @@
 cd ..\ansible
 echo "#################################################################"
 echo "Running Ansible playbook for production deployment..."
-ansible-playbook -i inventory/production.ini playbooks/deploy-docker.yml
+ansible-playbook -i inventory/production-redhat.ini playbooks/deploy-docker.yml
 cd ..\scripts
 echo "#################################################################"
 

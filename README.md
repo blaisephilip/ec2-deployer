@@ -32,7 +32,7 @@ Create a file called ec2_config.yml in the config folder in the root of this rep
 ```bash
 ---
 aws_region: eu-central-1
-instance_id: i-00262d6502547ef43
+instance_id: i-00262d6ef43
 key_file: ~/.ssh/ansible-docker-deployer.pem
 ```
 
@@ -51,9 +51,9 @@ The connection test shall run successful.
 
 ### Extend and update the inventory configuration
 
-Edit `ansible/inventory/production.ini` with your EC2 details: The ansible_ssh_private_key_file and the ansible_host IP value shall be adjusted.  
+Edit `ansible/inventory/production-redhat.ini` with your EC2 details: The ansible_ssh_private_key_file and the ansible_host IP value shall be adjusted.  
 - Use the EC2 instance's public IPv4 value.  
-- Adjust the SSH key name in the production.ini file as necessary.
+- Adjust the SSH key name in the production-redhat.ini file as necessary.
 
 ### Verify the server(s) added in the ansible inventory
 
@@ -92,7 +92,7 @@ cd scripts
 ./04-run-playbook-test.sh
 ```
 
-The production.ini inventory config is used in this playbook to test if Ansible can interact with the EC2 instance. Detailed EC2 information is retrieved by Ansible in this step. If package-related access problems occur, consider adding more packages to the test-connection.yml file in the pre_tasks section.
+The production-redhat.ini inventory config is used in this playbook to test if Ansible can interact with the EC2 instance. Detailed EC2 information is retrieved by Ansible in this step. If package-related access problems occur, consider adding more packages to the test-connection.yml file in the pre_tasks section.
 
 ### Edit the application-specfic configuration
 
@@ -114,7 +114,7 @@ Run the deployment:
 
 ```bash
 cd ansible
-ansible-playbook -i inventory/production.ini playbooks/deploy-docker.yml
+ansible-playbook -i inventory/production-redhat.ini playbooks/deploy-docker.yml
 ```
 
 ## Security Notes
@@ -135,7 +135,7 @@ ansible-playbook -i inventory/production.ini playbooks/deploy-docker.yml
 
 ### Detailed configuration
 
-production.ini  
+production-redhat.ini  
 ansible_host: Replace with your EC2 instance's public IP or DNS  
 Get your EC2 instance's public IP from AWS Console
 Navigate to EC2 → Instances → Select your instance
@@ -223,7 +223,7 @@ ssh -i C:/Users/YourUsername/.ssh/myapp-key.pem ec2-user@your-ec2-ip
 Test Ansible connection:
 
 ```bash
-ansible -i inventory/production.ini webservers -m ping
+ansible -i inventory/production-redhat.ini webservers -m ping
 ```
 
 If you lose the .pem file, you'll need to:

@@ -7,6 +7,12 @@
     - ../group_vars/all.yml
 
   tasks:
+    - name: Check distribution
+      debug:
+        msg: "Operating System: \n
+              Distribution: {{ ansible_distribution }} \n
+              OS family: ({{ ansible_os_family }})"
+
     - name: Gather EC2 instance information
       become: false  # Override become at task level (so this is run as the user, not root)
       amazon.aws.ec2_instance_info:
@@ -23,13 +29,44 @@
       debug:
         msg: "Public IP: {{ ec2_info.instances[0].public_ip_address }}"
       register: ec2_info
-    - name: Install required packages
+      when: ec2_info.instances | length > 0
+
+    - name: Install packages on RedHat
       yum:
+        name: 
+          - yum-utils
+          - docker
+          - python3-pip
+          - git
+          - nginx
+        state: present
+      when: ansible_os_family == "RedHat"
+    
+    - name: Install packages on Debian
+      apt:
         name: 
           - docker
           - python3-pip
           - git
+          - nginx
         state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Check Docker Version
+      shell: "docker --version"
+      register: docker_version_output
+      changed_when: false
+      failed_when: docker_version_output.rc > 1
+
+    - name: Print Docker version if installed
+      debug:
+        msg: "Docker is installed. Version: {{ docker_version_output.stdout }}"
+      when: docker_version_output.rc == 0
+
+    - name: Print message if Docker is not installed
+      debug:
+        msg: "Docker is not installed."
+      when: docker_version_output.rc != 0
 
     - name: Start Docker service
       service:
@@ -123,3 +160,13 @@
               
               Remaining images:
               {{ images.stdout_lines }}
+    - name: Make sure 'nginx' is started
+      systemd:
+        name: nginx
+        state: started
+        enabled: yes
+      register: result
+
+    - name: Show result
+      debug:
+        msg: "{{ result }}"
