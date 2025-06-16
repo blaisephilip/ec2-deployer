@@ -9,5 +9,8 @@ RUN npm run build
 # Production stage
 FROM nginx:alpine
 COPY --from=builder /app/build /usr/share/nginx/html
-COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+# Optional: Copy a custom nginx configuration file, if not managed by ansible or other means
+#COPY nginx/nginx_basic.conf /etc/nginx/conf.d/default.conf
+#COPY nginx/sites-available/server.conf /etc/nginx/conf.d/sites-available/server.conf
+
 EXPOSE 80

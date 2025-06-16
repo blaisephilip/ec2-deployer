@@ -30,9 +30,6 @@
           - packaging
         state: present
 
-    - name: End playbook after container verification
-      meta: end_play
-
   tasks:
     - name: Gather EC2 instance information
       become: false  # Override become at task level (so this is run as the user, not root)
@@ -46,7 +43,7 @@
         msg: "Instance details: {{ ec2_info }}"
 
     - name: Debug the public IP
-      become: false  # Override become at task level (so this is run as the user, not root)
+      become: false 
       debug:
         msg: "Public IP: {{ ec2_info.instances[0].public_ip_address }}"
       register: ec2_info
@@ -55,13 +52,8 @@
       debug:
         msg: "Operating System: {{ ansible_distribution }} ({{ ansible_os_family }})"
 
-    - name: Install and configure Nginx
+    - name: Test Nginx
       block:
-        - name: Install Nginx
-          yum:
-            name: nginx
-            state: present
-
         - name: Start Nginx service
           service:
             name: nginx
@@ -87,115 +79,118 @@
               ================ Nginx Config Test ================
               {{ nginx_config_test.stderr_lines | join('\n') }}
 
-    - name: Start Docker service
-      service:
-        name: docker
-        state: started
-        enabled: yes
-      register: docker_service
-    - name: Show Docker service status
-      debug:
-        msg: >
-          Docker service status:
-          Running: {{ docker_service.status.ActiveState == 'active' }}
-          Enabled: {{ docker_service.status.UnitFileState == 'enabled' }}
-      when: docker_service is defined
-
-    - name: List Docker images
-      command: docker images
-      register: docker_images
-      changed_when: false  # This command doesn't modify the system
-    - name: Show Docker images
-      debug:
-        msg: "{{ docker_images.stdout_lines }}"
-
-    - name: List Docker containers
-      command: docker ps -a
-      register: docker_containers
-      changed_when: false  # This command doesn't modify the system
-    - name: Show Docker containers
-      debug:
-        msg: "{{ docker_containers.stdout_lines }}"
-    - name: List Docker port mappings
-      shell: 'docker ps --format "table {% raw %}{{.Names}}{% endraw %}\t{% raw %}{{.Ports}}{% endraw %}"'
-      register: docker_ports
-      changed_when: false
-
-    - name: Show port mappings
-      debug:
-        msg: "Container port mappings:\n{{ docker_ports.stdout_lines | join('\n') }}"
-
-    - name: Remove old container and image
+    - name: Test Docker and cleanup old container and image
       block:
-        - name: Check if container exists
-          command: docker ps -a --format '{% raw %}{{.Names}}{% endraw %}'
-          register: existing_containers
-          changed_when: false
+      - name: Service check for Docker
+        service:
+          name: docker
+          state: started
+          enabled: yes
+        register: docker_service
+      - name: Show Docker service status
+        debug:
+          msg: >
+            Docker service status:
+            Running: {{ docker_service.status.ActiveState == 'active' }}
+            Enabled: {{ docker_service.status.UnitFileState == 'enabled' }}
+        when: docker_service is defined
+      - name: List Docker images
+        command: docker images
+        register: docker_images
+        changed_when: false  # This command doesn't modify the system
+      - name: Show Docker images
+        debug:
+          msg: "{{ docker_images.stdout_lines }}"
+      - name: List Docker containers
+        command: docker ps -a
+        register: docker_containers
+        changed_when: false  
+      - name: Show Docker containers
+        debug:
+          msg: "{{ docker_containers.stdout_lines }}"
+      - name: List Docker port mappings
+        shell: 'docker ps --format "table {% raw %}{{.Names}}{% endraw %}\t{% raw %}{{.Ports}}{% endraw %}"'
+        register: docker_ports
+        changed_when: false
 
-        - name: Stop running container
-          docker_container:
-            name: "{{ container_name }}"
-            state: stopped
-          when: container_name in existing_containers.stdout_lines
+      - name: Show port mappings
+        debug:
+          msg: "Container port mappings:\n{{ docker_ports.stdout_lines | join('\n') }}"
+  
+      - name: Remove old container and image
+        block:
+          - name: Check if container exists
+            command: docker ps -a --format '{% raw %}{{.Names}}{% endraw %}'
+            register: existing_containers
+            changed_when: false
 
-        - name: Remove container
-          docker_container:
-            name: "{{ container_name }}"
-            state: absent
+          - name: Stop running container
+            docker_container:
+              name: "{{ container_name }}"
+              state: stopped
+            when: container_name in existing_containers.stdout_lines
 
-        - name: Check if image exists
-          command: "docker images {{ docker_image_name }}:{{ docker_image_tag }} --format '{% raw %}{{.Repository}}:{{.Tag}}{% endraw %}'"
-          register: existing_images
+          - name: Remove container
+            docker_container:
+              name: "{{ container_name }}"
+              state: absent
 
-        - name: Show image being checked
-          debug:
-            msg: |
-              =================== Image Check ===================
-              Looking for image: {{ docker_image_name }}:{{ docker_image_tag }}
-              Found images: {{ existing_images.stdout_lines | default('none') }}
+          - name: Check if image exists
+            command: "docker images {{ docker_image_name }}:{{ docker_image_tag }} --format '{% raw %}{{.Repository}}:{{.Tag}}{% endraw %}'"
+            register: existing_images
 
-        - name: Remove Docker image
-          shell: |
-            if docker images {{ docker_image_name }}:{{ docker_image_tag }} -q | grep -q .; then
-              docker rmi -f $(docker images {{ docker_image_name }}:{{ docker_image_tag }} -q)
-              echo "Image removed"
-            else
-              echo "No matching image found"
-            fi
-          register: image_removal
-          ignore_errors: false
+          - name: Show image being checked
+            debug:
+              msg: |
+                =================== Image Check ===================
+                Looking for image: {{ docker_image_name }}:{{ docker_image_tag }}
+                Found images: {{ existing_images.stdout_lines | default('none') }}
 
-        - name: Show image removal status
-          debug:
-            msg: |
-              ================ Image Removal Status ================
-              {{ image_removal.stdout }}
+          - name: Remove Docker image
+            shell: |
+              if docker images {{ docker_image_name }}:{{ docker_image_tag }} -q | grep -q .; then
+                docker rmi -f $(docker images {{ docker_image_name }}:{{ docker_image_tag }} -q)
+                echo "Image removed"
+              else
+                echo "No matching image found"
+              fi
+            register: image_removal
+            ignore_errors: false
 
-        - name: Remove image archive if it exists
-          file:
-            path: "/tmp/r4visualizer-frontend.tar"
-            state: absent
-   
-    - name: Verify removal
-      block:
-        - name: Check containers
-          command: docker ps -a
-          register: containers
-          changed_when: false
+          - name: Show image removal status
+            debug:
+              msg: |
+                ================ Image Removal Status ================
+                {{ image_removal.stdout }}
 
-        - name: Check images
-          command: docker images
-          register: images
-          changed_when: false
+          - name: Remove image archive if it exists
+            file:
+              path: "/tmp/r4visualizer-frontend.tar"
+              state: absent
+    
+      - name: Verify removal
+        block:
+          - name: Check containers
+            command: docker ps -a
+            register: containers
+            changed_when: false
 
-        - name: Show results
-          debug:
-            msg: |
-              Remaining containers:
-              {{ containers.stdout_lines }}
-              
-              Remaining images:
-              {{ images.stdout_lines }}
+          - name: Check images
+            command: docker images
+            register: images
+            changed_when: false
+
+          - name: Show results
+            debug:
+              msg: |
+                Remaining containers:
+                {{ containers.stdout_lines }}
+                
+                Remaining images:
+                {{ images.stdout_lines }}
+
+    - name: End playbook after container verification
+      meta: end_play
 
     - name: Deploy new container
       block:
@@ -285,7 +280,6 @@
               =================== Docker Image Details ===================
               Image: {{ docker_image_name }}:{{ docker_image_tag }}
               Details: {{ image_details.stdout_lines | default(['No image found']) | join('\n') }}
-
 
         - name: Start container
           docker_container:

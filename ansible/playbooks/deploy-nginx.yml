@@ -1,0 +1,121 @@
+---
+- name: Deploy Docker containerized Node.js/React application
+  hosts: webservers
+  become: true # This enables sudo privileges for all tasks in this play
+  vars_files:
+    - ../../config/ec2_config.yml
+    - ../group_vars/all.yml
+
+  tasks:
+    - name: Check distribution
+      debug:
+        msg: "Operating System: \n
+              Distribution: {{ ansible_distribution }} \n
+              OS family: ({{ ansible_os_family }})"
+
+    - name: Gather EC2 instance information
+      become: false  # Override become at task level (so this is run as the user, not root)
+      amazon.aws.ec2_instance_info:
+        region: "{{ aws_region }}"
+        instance_ids:
+          - "{{ instance_id }}"
+      register: ec2_info
+    - name: Debug the instance information
+      debug:
+        msg: "Instance details: {{ ec2_info }}"
+
+    - name: Debug the public IP
+      become: false  # Override become at task level (so this is run as the user, not root)
+      debug:
+        msg: "Public IP: {{ ec2_info.instances[0].public_ip_address }}"
+      register: ec2_info
+      when: ec2_info.instances | length > 0
+
+    - name: Install packages on RedHat
+      yum:
+        name: 
+          - nginx
+        state: present
+      when: ansible_os_family == "RedHat"
+    
+    - name: Install packages on Debian
+      apt:
+        name: 
+          - nginx
+        state: present
+      when: ansible_os_family == "Debian"
+
+    - name: Make sure 'nginx' is started
+      systemd:
+        name: nginx
+        state: started
+        enabled: yes
+      register: nginx_status_result
+      become: false
+
+    - name: Save Nginx status to local file
+      copy:
+        content: "{{ nginx_status_result}}"
+        dest: "{{ playbook_dir }}/../../temp/nginx_status_{{ ansible_date_time.iso8601 }}.json"
+      delegate_to: localhost
+      become: false
+
+    - name: Overwrite Nginx configuration
+      copy:
+        src: "{{ playbook_dir }}/../../nginx/nginx_proxy_pass.conf"
+        dest: /etc/nginx/nginx.conf
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Ensure the directory exists
+      file:
+        path: /etc/nginx/sites-available/  
+        state: directory
+
+    #- name: List folder content
+    #  shell: 'ls -l /etc/nginx/'
+    #  register: nginx_folder_content
+    #  changed_when: false
+
+    #- name: Nginx folder content
+    #  debug:
+    #    msg: "Container port mappings:\n{{ nginx_folder_content.stdout_lines | join('\n') }}"
+
+    - name: Overwrite server configuration
+      copy:
+        src: "{{ playbook_dir }}/../../nginx/sites-available/server.conf"
+        dest: /etc/nginx/sites-available/server.conf
+        owner: root
+        group: root
+        mode: '0644'
+    - name: Ensure Nginx is running
+      systemd:
+        name: nginx
+        state: restarted
+        enabled: yes
+      register: nginx_restart_result
+      become: true
+
+    - name: Save Nginx restart status to local file
+      copy:
+        content: "{{ nginx_restart_result }}"
+        dest: "{{ playbook_dir }}/../../temp/nginx_restart_status_{{ ansible_date_time.iso8601 }}.json"
+      delegate_to: localhost
+      become: false
+
+    - name: List Docker containers
+      command: docker ps -a
+      register: docker_containers
+      changed_when: false  # This command doesn't modify the system
+    - name: Show Docker containers
+      debug:
+        msg: "{{ docker_containers.stdout_lines }}"
+    - name: List Docker port mappings
+      shell: 'docker ps --format "table {% raw %}{{.Names}}{% endraw %}\t{% raw %}{{.Ports}}{% endraw %}"'
+      register: docker_ports
+      changed_when: false
+
+    - name: Show port mappings
+      debug:
+        msg: "Container port mappings:\n{{ docker_ports.stdout_lines | join('\n') }}"
