@@ -21,7 +21,7 @@ fi
 
 echo "#################################################################"
 echo "Running Ansible playbook for production deployment..."
-ansible-playbook -i "$INVENTORY_PATH" ../ansible/playbooks/deploy-docker-test.yml
+ansible-playbook -i "$INVENTORY_PATH" ../ansible/playbooks/deploy-docker.yml
 
 echo "#################################################################"
 

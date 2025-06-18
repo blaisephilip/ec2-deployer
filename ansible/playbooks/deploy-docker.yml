@@ -38,7 +38,6 @@
           - docker
           - python3-pip
           - git
-          - nginx
         state: present
       when: ansible_os_family == "RedHat"
     
@@ -48,7 +47,6 @@
           - docker
           - python3-pip
           - git
-          - nginx
         state: present
       when: ansible_os_family == "Debian"
 
@@ -160,13 +158,3 @@
               
               Remaining images:
               {{ images.stdout_lines }}
-    - name: Make sure 'nginx' is started
-      systemd:
-        name: nginx
-        state: started
-        enabled: yes
-      register: result
-
-    - name: Show result
-      debug:
-        msg: "{{ result }}"

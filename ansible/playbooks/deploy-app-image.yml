@@ -15,19 +15,8 @@
     - name: Install required packages
       yum:
         name: 
-          - docker
-          - python3-pip
-          - git
           - net-tools
           - rsync
-        state: present
-
-    - name: Install required Python packages  
-      pip:
-        name:
-          - boto3
-          - botocore
-          - packaging
         state: present
 
   tasks:
