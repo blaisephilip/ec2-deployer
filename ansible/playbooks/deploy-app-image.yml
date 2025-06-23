@@ -38,10 +38,12 @@
       register: ec2_info
 
     - name: Check distribution
+      become: false
       debug:
         msg: "Operating System: {{ ansible_distribution }} ({{ ansible_os_family }})"
 
     - name: Test Nginx
+      become: false
       block:
         - name: Start Nginx service
           service:
@@ -58,6 +60,7 @@
               Enabled: {{ nginx_service.status.UnitFileState == 'enabled' }}
 
         - name: Check Nginx configuration
+          become: true
           command: nginx -t
           changed_when: false
           register: nginx_config_test
@@ -124,38 +127,38 @@
               name: "{{ container_name }}"
               state: absent
 
-          - name: Check if image exists
-            command: "docker images {{ docker_image_name }}:{{ docker_image_tag }} --format '{% raw %}{{.Repository}}:{{.Tag}}{% endraw %}'"
-            register: existing_images
+          #- name: Check if image exists
+          #  command: "docker images {{ docker_image_name }}:{{ docker_image_tag }} --format '{% raw %}{{.Repository}}:{{.Tag}}{% endraw %}'"
+          #  register: existing_images
 
-          - name: Show image being checked
-            debug:
-              msg: |
-                =================== Image Check ===================
-                Looking for image: {{ docker_image_name }}:{{ docker_image_tag }}
-                Found images: {{ existing_images.stdout_lines | default('none') }}
+          #- name: Show image being checked
+          #  debug:
+          #    msg: |
+          #      =================== Image Check ===================
+          #      Looking for image: {{ docker_image_name }}:{{ docker_image_tag }}
+          #      Found images: {{ existing_images.stdout_lines | default('none') }}
 
-          - name: Remove Docker image
-            shell: |
-              if docker images {{ docker_image_name }}:{{ docker_image_tag }} -q | grep -q .; then
-                docker rmi -f $(docker images {{ docker_image_name }}:{{ docker_image_tag }} -q)
-                echo "Image removed"
-              else
-                echo "No matching image found"
-              fi
-            register: image_removal
-            ignore_errors: false
+          #- name: Remove Docker image
+          #  shell: |
+          #    if docker images {{ docker_image_name }}:{{ docker_image_tag }} -q | grep -q .; then
+          #      docker rmi -f $(docker images {{ docker_image_name }}:{{ docker_image_tag }} -q)
+          #      echo "Image removed"
+          #    else
+          #      echo "No matching image found"
+          #    fi
+          #  register: image_removal
+          #  ignore_errors: false
 
-          - name: Show image removal status
-            debug:
-              msg: |
-                ================ Image Removal Status ================
-                {{ image_removal.stdout }}
+          #- name: Show image removal status
+          #  debug:
+          #    msg: |
+          #      ================ Image Removal Status ================
+          #      {{ image_removal.stdout }}
 
-          - name: Remove image archive if it exists
-            file:
-              path: "/tmp/r4visualizer-frontend.tar"
-              state: absent
+          #- name: Remove image archive if it exists
+          #  file:
+          #   path: "/tmp/r4visualizer-frontend.tar"
+          #    state: absent
     
       - name: Verify removal
         block:
@@ -178,16 +181,13 @@
                 Remaining images:
                 {{ images.stdout_lines }}
 
-    - name: End playbook after container verification
-      meta: end_play
-
     - name: Deploy new container
+      become: false
       block:
         - name: Check if Docker archive exists locally
           stat:
             path: "{{ docker_image_archive }}"
           delegate_to: localhost
-          become: false
           register: archive_stat
 
         - name: Fail if archive doesn't exist
@@ -200,7 +200,6 @@
             path: "{{ docker_image_archive }}"
             checksum_algorithm: sha256
           delegate_to: localhost
-          become: false
           register: local_archive
 
         - name: Get remote archive hash
@@ -222,6 +221,7 @@
             dest: "/tmp/r4visualizer-frontend.tar"
             mode: '0644'
           register: copy_image
+          become: false
           when: >
             not remote_archive.stat.exists or
             remote_archive.stat.checksum != local_archive.stat.checksum
@@ -261,6 +261,7 @@
           shell: docker images {{ docker_image_name }}:{{ docker_image_tag }} --format "ID:{% raw %}{{.ID}}{% endraw %} Digest:{% raw %}{{.Digest}}{% endraw %} Created:{% raw %}{{.CreatedAt}}{% endraw %}"
           register: image_details
           changed_when: false
+          become: true
           ignore_errors: true
 
         - name: Debug image details
@@ -307,6 +308,7 @@
               when: not (container_status.stdout == 'running' and container_running.stdout == 'true')
 
     - name: Show detailed service configurations
+      become: false
       block:
         - name: Create temp directory locally
           file:
@@ -319,6 +321,7 @@
           shell: |
             nginx -T 2>/dev/null
           register: nginx_full_config
+          become: true
           changed_when: false
 
         - name: Save Nginx config to local file
@@ -345,11 +348,14 @@
                   {{ container | indent(4) }}
               {% endfor %}
 
+# TODO - here a hot reload should be enough: sudo nginx -s reload
         - name: Restart Nginx service
+          become: false
           block:
             - name: Test Nginx configuration
               shell: nginx -t
               register: nginx_test
+              become: true
               changed_when: false
 
             - name: Show Nginx test results
@@ -363,6 +369,7 @@
                 name: nginx
                 state: restarted
               when: nginx_test.rc == 0
+              become: true
               register: nginx_restart
 
             - name: Verify Nginx is running
@@ -389,15 +396,18 @@
                   {% endfor %}
 
         - name: Restart Docker service
+          become: false
           block:
             - name: Apply system configurations
               command: sysctl -p
+              become: true
               changed_when: true
 
             - name: Restart Docker daemon
               service:
                 name: docker
                 state: restarted
+              become: true
               register: docker_restart
 
             - name: Wait for Docker to be ready

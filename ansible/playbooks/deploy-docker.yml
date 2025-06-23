@@ -66,6 +66,12 @@
         msg: "Docker is not installed."
       when: docker_version_output.rc != 0
 
+    - name: Add ec2-user to Docker group
+      # This task ensures that the ec2-user can run Docker commands without sudo
+      become: true
+      shell: "usermod -aG docker ec2-user"
+      when: ansible_os_family == "RedHat"
+
     - name: Start Docker service
       service:
         name: docker

@@ -13,7 +13,7 @@ container_env:
 
 # Resource Limits
 container_memory: "512MB"
-ontainer_cpu_shares: 512  # Value between 2-262144, where 1024 = 1 CPU core
+container_cpu_shares: 512  # Value between 2-262144, where 1024 = 1 CPU core
 
 # Health Check
 health_check_interval: "30s"

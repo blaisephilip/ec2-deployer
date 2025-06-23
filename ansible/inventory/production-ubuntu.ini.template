@@ -1,6 +1,6 @@
 [webservers]
 # Use the private IPv4 addresses of the EC2 instances
-ec2-ubuntu-1 ansible_host=3.125.46.245
+ec2-ubuntu-1 ansible_host=PUBLIC_IP_ADDRESS
 
 # Common Variables for All Production Servers
 [production:children]

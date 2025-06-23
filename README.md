@@ -1,6 +1,6 @@
 # ec2-deployer
 
-Docker-based deployment of Node.js/React applications to AWS EC2 using Ansible.
+The solution is a practical deployment automation of Docker-based containers to AWS EC2 using Ansible.
 
 ## Prerequisites
 
@@ -51,9 +51,11 @@ The connection test shall run successful.
 
 ### Extend and update the inventory configuration
 
-Edit `ansible/inventory/production-redhat.ini` with your EC2 details: The ansible_ssh_private_key_file and the ansible_host IP value shall be adjusted.  
+Create a new file as `ansible/inventory/production-redhat.ini` based on the template in the same folder, and update it with your EC2 details: The ansible_ssh_private_key_file and the ansible_host IP value shall be adjusted.  
 - Use the EC2 instance's public IPv4 value.  
 - Adjust the SSH key name in the production-redhat.ini file as necessary.
+
+Make sure to use the proper .ini file based on the target system. Amazon Linux is Redhat-based, but Ubuntu-based EC2 installations can be set up as well.  
 
 ### Verify the server(s) added in the ansible inventory
 
@@ -98,7 +100,28 @@ The production-redhat.ini inventory config is used in this playbook to test if A
 
 - Update `ansible/group_vars/all.yml` with your settings
 
-## Deploy
+
+### Set up Docker and nginx
+
+Docker takes care of application containers - isolated environments that can be used in the whole lifecycle of a software solution.  
+
+nginx is used to create a so-called reverse proxy. A solution that enables multiple website's hosting on the same server, and takes care of path-based routing, for example.  
+
+Run the appropriate scripts to set up the both on the inventory targets:
+
+```bash
+cd scripts
+./05-deploy-docker.sh
+```
+
+```bash
+cd scripts
+./06-deploy-nginx.sh
+```
+
+## Deploy your application
+
+An application's deployment can be executed in many different ways, depending on the use case.  
 
 Deployment variants:
 1. Local build, local image, direct deployment to EC2.
@@ -108,24 +131,33 @@ Deployment variants:
 5. Remote build via Github Actions, deployment to EC2 by Github Actions.
 6. Cloning and build on the EC2 instance.
 
-Currently implemented variant: 1.
+Currently implemented variants: 1.
+
+Make sure to create a customized docker/docker_config.yml file based on this template: `docker/docker_config_template.yml`
+
+Please note that the archived Docker image must exist before proceeding.
 
 Run the deployment:
 
 ```bash
-cd ansible
-ansible-playbook -i inventory/production-redhat.ini playbooks/deploy-docker.yml
+cd scripts
+./07-deploy-app-dev.sh
 ```
 
-## Security Notes
+The archive is uploaded to the /tmp location on the server, extracted, and the container is created as configured. The service is also started by the script, after port- and prerequisite controls.  
+
+
+## General notes about the Docker-based deployment
+
+### Security Notes
 
 - Ensure EC2 security group allows inbound traffic on port 80
-- Keep SSH key secure
+- Keep your SSH key secure
 - Use appropriate IAM roles for EC2
 - Consider implementing Docker content trust
 - Use specific versions instead of 'latest' tag in production
 
-## Benefits of Docker Deployment
+### Benefits of Docker Deployment
 
 - Consistent environments across development and production
 - Isolated application runtime
@@ -133,7 +165,7 @@ ansible-playbook -i inventory/production-redhat.ini playbooks/deploy-docker.yml
 - Simple rollbacks using container versioning
 - Improved security through containerization
 
-### Detailed configuration
+#### Detailed configuration
 
 production-redhat.ini  
 ansible_host: Replace with your EC2 instance's public IP or DNS  
@@ -207,26 +239,36 @@ Update your inventory file with the new key path:
 ec2-instance ansible_host=your-ec2-ip ansible_user=ec2-user ansible_ssh_private_key_file=C:/Users/YourUsername/.ssh/myapp-key.pem
 ```
 
-Security Best Practices
-Never share or commit your .pem file
-Store the key in a secure location
-Backup the key file safely
-Use different keys for different environments
-Rotate keys periodically
-Testing the Connection
+Security Best Practices:
++ Never share or commit your .pem file
++ Store the key in a secure location
++ Backup the key file safely
++ Use different keys for different environments
++ Rotate keys periodically
+
+#### Testing the Connection
+
 Test SSH access:  
 
 ```bash
 ssh -i C:/Users/YourUsername/.ssh/myapp-key.pem ec2-user@your-ec2-ip
 ```
 
-Test Ansible connection:
+Test the Ansible connection:
 
 ```bash
 ansible -i inventory/production-redhat.ini webservers -m ping
 ```
 
 If you lose the .pem file, you'll need to:
-Create a new key pair
-Update the EC2 instance with the new key
-Update your Ansible inventory file
+1. Create a new key pair
+2. Update the EC2 instance with the new key
+3. Update your Ansible inventory file
+
+
+## Known issues / open features
+
+ - nginx configuration for Amazon Linux 2 shall be adjusted
+ - parallelization shall be configurable in case of many targets in the inventory
+ - nginx configuration for Ubuntu shall be tested
+ 

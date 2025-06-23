@@ -9,10 +9,15 @@
   
 ## HTTPS
 server {
+
+  # Listen on port 80 for HTTP requests
+  #listen 80;
   # SSL configuration
   listen 443 ssl http2;
   #listen [::]:443 ssl http2;
+  
   server_name testserver.yourorg.lan; 
+  #server_name _;
 
   access_log  /var/log/nginx/testserver.access.log;
   error_log /var/log/nginx/testserver.error.log;
@@ -28,6 +33,7 @@ server {
   location / {
     #root /var/www/tutorial;
     #index index.html index.htm;
+    #try_files $uri $uri/ /index.html;
     proxy_pass http://localhost:8081/;
     # MIME types added here to enable loading CSS, images, etc.
     # include  /etc/nginx/mime.types;

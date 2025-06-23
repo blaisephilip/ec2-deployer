@@ -1,6 +1,6 @@
 [webservers]
 # Use the private IPv4 addresses of the EC2 instances
-ec2-amazon-redhat-1 ansible_host=18.194.178.246
+ec2-amazon-redhat-1 ansible_host=PUBLIC_IP_ADDRESS
 
 # Common Variables for All Production Servers
 [production:children]
