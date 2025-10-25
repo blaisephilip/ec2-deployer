@@ -140,6 +140,9 @@ dist
 config/ec2_config.yml
 config/docker_config.yml
 scripts/ansible-env
+scripts/aws
+scripts/win/ansible-env
 temp
 ansible/inventory/*.ini
 nginx/sites-available/server.conf
+

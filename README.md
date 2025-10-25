@@ -4,15 +4,17 @@ The solution is a practical deployment automation of Docker-based containers to 
 
 ## Prerequisites
 
-- Debian-based OS
+- Debian-based OS or Windows
 - AWS EC2 instance running Amazon Linux 2
 - Node.js/React application in a Git repository
 
 ## Setup
 
-### Install required tools:
+### Install required tools
 
-**Ansible**
+For the installation process of prerequisites on Windows, see the chapter [Setup on Windows](###setup-on-windows)
+
+**Ansible**  
 
 ```bash
 cd scripts
@@ -25,7 +27,6 @@ The script shall prompt you to install missing APT packages. If all packages are
 Follow the instructions in doc/install_aws_cli.md.  
 
 ### Test the connection to the EC2 instance
-
 
 Create a file called ec2_config.yml in the config folder in the root of this repository. Adapt this as file content:  
 
@@ -52,6 +53,7 @@ The connection test shall run successful.
 ### Extend and update the inventory configuration
 
 Create a new file as `ansible/inventory/production-redhat.ini` based on the template in the same folder, and update it with your EC2 details: The ansible_ssh_private_key_file and the ansible_host IP value shall be adjusted.  
+
 - Use the EC2 instance's public IPv4 value.  
 - Adjust the SSH key name in the production-redhat.ini file as necessary.
 
@@ -100,7 +102,6 @@ The production-redhat.ini inventory config is used in this playbook to test if A
 
 - Update `ansible/group_vars/all.yml` with your settings
 
-
 ### Set up Docker and nginx
 
 Docker takes care of application containers - isolated environments that can be used in the whole lifecycle of a software solution.  
@@ -119,11 +120,25 @@ cd scripts
 ./06-deploy-nginx.sh
 ```
 
+### Setup on Windows
+
+A proper python installation and WSL are required. Execute the following scripts in the scripts/win folder and follow through the diagnostic reports as necessary:
+
+```bash
+00-find-python.ps1
+01-setup-python-env.ps1
+02-install-prerequisites.ps1
+```
+
+Proceed with the setup by logging in the Ubuntu WSL terminal, and follow the steps described here:  
+doc/install_aws_cli.md  
+
 ## Deploy your application
 
 An application's deployment can be executed in many different ways, depending on the use case.  
 
 Deployment variants:
+
 1. Local build, local image, direct deployment to EC2.
 2. Local build, local image, image push to Github, deployment to EC2 from Github controlled by local Ansible playbook.
 3. Local build, local image, image push to Github, deployment to EC2 from Github controlled by Github Actions.
@@ -145,7 +160,6 @@ cd scripts
 ```
 
 The archive is uploaded to the /tmp location on the server, extracted, and the container is created as configured. The service is also started by the script, after port- and prerequisite controls.  
-
 
 ## General notes about the Docker-based deployment
 
@@ -173,11 +187,10 @@ Get your EC2 instance's public IP from AWS Console
 Navigate to EC2 → Instances → Select your instance
 Copy the "Public IPv4 address" or "Public IPv4 DNS"
 
-
-ansible_user: The SSH user for EC2 instance  
-* For Amazon Linux 2 AMI: use ec2-user
-* For Ubuntu AMI: use ubuntu
-* For RHEL AMI: use ec2-user
+- ansible_user: The SSH user for EC2 instance  
+- For Amazon Linux 2 AMI: use ec2-user
+- For Ubuntu AMI: use ubuntu
+- For RHEL AMI: use ec2-user
 
 ansible_ssh_private_key_file: Path to your .pem key file  
 Use the full path to your .pem file
@@ -239,12 +252,13 @@ Update your inventory file with the new key path:
 ec2-instance ansible_host=your-ec2-ip ansible_user=ec2-user ansible_ssh_private_key_file=C:/Users/YourUsername/.ssh/myapp-key.pem
 ```
 
-Security Best Practices:
-+ Never share or commit your .pem file
-+ Store the key in a secure location
-+ Backup the key file safely
-+ Use different keys for different environments
-+ Rotate keys periodically
+Security Best Practices:  
+
+- Never share or commit your .pem file
+- Store the key in a secure location
+- Backup the key file safely
+- Use different keys for different environments
+- Rotate keys periodically
 
 #### Testing the Connection
 
@@ -260,15 +274,14 @@ Test the Ansible connection:
 ansible -i inventory/production-redhat.ini webservers -m ping
 ```
 
-If you lose the .pem file, you'll need to:
+If you lose the .pem file, you'll need to:  
+
 1. Create a new key pair
 2. Update the EC2 instance with the new key
 3. Update your Ansible inventory file
 
-
 ## Known issues / open features
 
- - nginx configuration for Amazon Linux 2 shall be adjusted
- - parallelization shall be configurable in case of many targets in the inventory
- - nginx configuration for Ubuntu shall be tested
- 
+- nginx configuration for Amazon Linux 2 shall be adjusted  
+- parallelization shall be configurable in case of many targets in the inventory  
+- nginx configuration for Ubuntu shall be tested

@@ -24,12 +24,16 @@ if ! command -v python3 &> /dev/null; then
     sudo apt install -y python-is-python3
 fi
 
+echo "Set up ansible virtual environment..."
 # Create virtual environment with Python 3.11
-python -m venv ansible-env
+python3 -m venv ansible-env
+echo "Virtual environment 'ansible-env' created."
 
+echo "Activating virtual environment..."
 # Activate the virtual environment
 source ansible-env/bin/activate
 
+echo "Installing ansible..."
 # Install Ansible in the virtual environment
 pip install ansible
 
